@@ -5,6 +5,12 @@
 # TODO: Unify IP,DNS,OS data among all rows
 #xmlstarlet el -u *.nessus | sort -u
 
+TAB=$'\t'
+NL=$'\n'
+OUTDIR="out"
+VULN="$OUTDIR/nessus.tsv"
+MSFDIR="/opt/metasploit/apps/pro/msf3" # Metasploit's framework directory in Kali
+
 # Single dependency is xmlstarlet
 if ! which 'xmlstarlet' >/dev/null; then 
 	echo "# apt-get install xmlstarlet"
@@ -27,7 +33,11 @@ ls *.nessus
 xmlstarlet sel -T -t -m //ReportItem[@pluginID='46180'] -v "../HostProperties/tag[@name='host-ip']" -o $'\t' -v "../HostProperties/tag[@name='host-fqdn']" -n -v plugin_output  -n *.nessus | grep -v -e '^The' -e '^$' | sed ':a;$!N;s/\n  - /\t/;ta;P;D' | awk -F'\t' '{ for (i=2; i<NF; i++){printf "%s%s%s\n",$1,FS,$i}}' | sort -uV | awk -F '\t' '{ a[$1] = a[$1] "\t" $2 } END { for (item in a ) print item, a[item] }' | sort -uV | sed -e 's/ *\t/, /g' -e 's/, /\t/' > out/ip2host.txt
 
 # Replaced dns-name with host-fqdn
-xmlstarlet sel -T -t -m NessusClientData_v2/Report/ReportHost -v "HostProperties/tag[@name='host-ip']" -o $'\t' -v "HostProperties/tag[@name='host-fqdn']" -o $'\t' -v "str:replace(HostProperties/tag[@name='operating-system'],'&#10;',', ')" -m "ReportItem" -n -o $'\t' -v @port -o '/' -v @protocol -o $'\t' -v @svc_name -o $'\t' -o $'\t' -v @pluginName -o $'\t' -v @pluginFamily -o $'\t' -v @pluginID -o $'\t' -i '@severity=4' -o 'Critical' -b -i '@severity=3' -o 'High' -b -i '@severity=2' -o 'Medium' -b -i '@severity=1' -o 'Low' -b -i '@severity=0' -o 'Info' -b -o $'\t' -m 'cve' -v . -o '&#x20;' -b -b -n  *.nessus | awk 'BEGIN {h="[ERROR]"}{if (/^\t/) printf("%s%s\n",h,$0); else h=$0;}' | sort -Vu | sed "1i\\#IP\tHostname\tOS\tPort\tService\t\tName\tFamily\tID\tSeverity\tCVE" > out/nessus.tsv
+xmlstarlet sel -T -t -m NessusClientData_v2/Report/ReportHost -v "HostProperties/tag[@name='host-ip']" -o $'\t' -v "HostProperties/tag[@name='host-fqdn']" -o $'\t' -v "str:replace(HostProperties/tag[@name='operating-system'],'&#10;',', ')" -m "ReportItem" -n -o $'\t' -v @port -o '/' -v @protocol -o $'\t' -v @svc_name -o $'\t' -o $'\t' -v @pluginName -o $'\t' -v @pluginFamily -o $'\t' -v @pluginID -o $'\t' -i '@severity=4' -o 'Critical' -b -i '@severity=3' -o 'High' -b -i '@severity=2' -o 'Medium' -b -i '@severity=1' -o 'Low' -b -i '@severity=0' -o 'Info' -b -o $'\t' -m 'cve' -v . -o ' ' -b -b -n  *.nessus | awk 'BEGIN {h="[ERROR]"}{if (/^\t/) printf("%s%s\n",h,$0); else h=$0;}' | sort -Vu | sed "1i\\#IP\tHostname\tOS\tPort\tService\t\tName\tFamily\tID\tSeverity\tCVE" > out/nessus_all.tsv
+
+# TODO: Nessus has added some OS data in the host-ip field that does not sync up with the current processing, so we split those lines out
+grep "^\(#\|[0-9]\)" out/nessus_all.tsv > out/nessus.tsv
+grep -v "^\(#\|[0-9]\)" out/nessus_all.tsv > out/nessus_os.tsv
 
 # Merge full list of hostnames which each IP
 while read line; do
@@ -48,23 +58,19 @@ cat out/nessus_issues_single.tsv | grep -v "^#" | awk -F '\t' '{printf "%s: %s r
 
 cat out/nessus.tsv | cut -f1,7 | grep -v $'\t$' | sort -uV > out/nessus_hosts.tsv
 cat out/nessus_hosts.tsv | sort -Vu | awk -F '\t' '{ a[$1] = a[$1] "\t" $2 } END { for (item in a ) print item, a[item] }' | sort | grep -v "^ " > out/nessus_hosts_single.tsv
+# host_count has some accidental OS included (incorrect tab use?)
 cat out/nessus_hosts_single.tsv | grep -v "^#" | awk -F '\t' '{printf "%s: %s issues present\n",$1,NF-1}' | sed 's/\(: 1 resource\)s/\1/' > out/nessus_host_count.txt
 cat out/nessus_hosts_single.tsv | grep -v "^#" | awk -F '\t' '{ for(i=1;i<=NF;i++) { print $i; } print '\n' }' > out/nessus_host_layout.txt
 
 # Extract some useful results for immediate analysis
-TAB=$'\t'
 grep -e 'www' -e 'http' -e "${TAB}80/tcp" -e "${TAB}443/tcp" out/nessus.tsv | cut -f 1,4,5 | sed 's/www/http/;s/?//g;s#/tcp##' | awk -F'\t' '{print $3"://"$1":"$2}' | sed 's/^.*-http/http/;s/http\(s\)\?-[^:]*/http/' | sort -uV > out/web_servers.txt
 grep -i -e default -e Unprivileged -e blank -e anonymous -e NULL -e guest -e Credential -e password out/nessus.tsv | grep -v -e uncredentialed -e 'Error' -e 'default file' | cut -f1,4,5,7 | sort -t\t -k3,3 > out/no_creds_required.txt
-
-OUTDIR="out"
-VULN="$OUTDIR/nessus.tsv"
-MSFDIR="/opt/metasploit/apps/pro/msf3/" # Metasploit's framework directory
 
 # Match lines with a CVE to the IP/PORT back to the MSF module, including exploit ranking, if it doesn't already exist
 if [ ! -f "msf2cve.txt" ]
 then
   echo "# Matching Hosts with CVE numbers to MSF Modules"
-  grep -r "CVE[^-]" "$MSFDIR/modules/" | grep -v '.svn' | sed 's/:[^0-9]*\([0-9-]*\).*/\tCVE-\1/' > msf2cve.txt
+  grep -r "CVE[^-]" "$MSFDIR/modules" | grep -v '.svn' | sed 's/:[^0-9]*\([0-9-]*\).*/\tCVE-\1/;s#//#/#g' > msf2cve.txt
 fi
 cp msf2cve.txt out
 

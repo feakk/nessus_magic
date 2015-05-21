@@ -2,8 +2,8 @@
 #TODO THIS: cat combined_MicrosoftPatches.txt | cut -f1,2,7 | awk -F '\t' '{print $2"\t"$1}' | tsv_combine_columns | tr '\t' ',' | sed 's/,/\t/;s/,/, /g' | table_html | table_header 
 # for i in $(ls combined_*); do cat "$i" | cut -f1,7 | awk -F '\t' '{print $2"\t"$1}' | tsv_combine_columns | tr '\t' ',' | sed 's/,/\t/;s/,/, /g' | table_html | table_header > $i.table; done
 
-
 TAB=$'\t'
+NL=$'\n'
 function csv_match_column() { COL=${1-'1'}; MATCH=${2-'test'}; awk -F'\t' -v c="$COL" -v m="$MATCH" '$c ~ m'; }
 function newlines2commas() { awk 'NR==1{x=$0;next}NF{x=x","$0}END{print x}'; }
 function prepend_line() { sed "s~^~$@~"; } # Adds to beginning of each line
@@ -34,13 +34,13 @@ METASPLOIT_DIR="/pentest/exploits/framework"
 #CVSSGEN='./openCVSS-ph/openCVSS-tester.py'
 mkdir out 2>/dev/null
 
-#echo "# Combining all medium and high '$NAME' ($MATCH) findings into a single finding"
+#echo "# Combining all medium and higher risk '$NAME' ($MATCH) findings into a single finding"
 
 #MSF=$(grep -r "CVE[^-]" "/pentest/exploits/framework/modules/" | grep -v '.svn' | sed 's/:[^0-9]*\([0-9-]*\).*/\tCVE-\1/')
 #alias cve2link='sed '\''s#\(CVE-[0-9]*-[0-9]*\)#<a href="http://www.cvedetails.com/cve-details.php?t=1\&cve_id=\1">\1</a>#ig'\'''
 #function cve2cvss() { xmlstarlet sel -N x="http://scap.nist.gov/schema/feed/vulnerability/2.0" -N cvss="http://scap.nist.gov/schema/cvss-v2/0.2" -N vuln="http://scap.nist.gov/schema/vulnerability/0.4" -T -t -m /x:nvd/x:entry -v @id -o '$'\t' -m vuln:cvss/cvss:base_metrics -v cvss:score -o " (AV:" -v 'substring(cvss:access-vector,1,1)' -o "/AC:" -v 'substring(cvss:access-complexity,1,1)' -o "/Au:" -v 'substring(cvss:authentication,1,1)' -o "/C:" -v 'substring(cvss:confidentiality-impact,1,1)' -o "/I:" -v 'substring(cvss:integrity-impact,1,1)' -o "/A:" -v 'substring(cvss:availability-impact,1,1)' -o ")"  -b -n *.xml | sort -Vu ; } # NVDCVSS Score Parsing
 
-xmlstarlet sel -T -t -m NessusClientData_v2/Report/ReportHost -v "HostProperties/tag[@name='host-ip']" -o $'\t' -v "HostProperties/tag[@name='dns-name']" -o $'\t' -v "str:replace(HostProperties/tag[@name='operating-system'],'&#10;',', ')" -m "ReportItem" -n -o $'\t' -v @port -o '/' -v @protocol -o $'\t' -v @svc_name -o $'\t' -o $'\t' -v @pluginName -o $'\t' -v @pluginFamily -o $'\t' -v @pluginID -o $'\t' -i '@severity=3' -o 'High' -b -i '@severity=2' -o 'Medium' -b -i '@severity=1' -o 'Low' -b -i '@severity=0' -o 'Info' -b -o $'\t' -v "str:replace(synopsis,'&#10;',' ')" -o $'\t' -v "str:replace(description,'&#10;',' ')" -o $'\t' -v "str:replace(solution,'&#10;',' ')" -o $'\t' -v cvss_base_score -o ' ' -v cvss_vector -b -n *.nessus | awk 'BEGIN {h="[ERROR]"}{if (/^\t/) printf("%s%s\n",h,$0); else h=$0;}' | sort -Vu | grep -e "${TAB}Critical${TAB}" -e "${TAB}High${TAB}" -e "${TAB}Medium${TAB}" | csv_match_column 7 "$MATCH" > $INFILE
+xmlstarlet sel -T -t -m NessusClientData_v2/Report/ReportHost -v "HostProperties/tag[@name='host-ip']" -o $'\t' -v "HostProperties/tag[@name='dns-name']" -o $'\t' -v "str:replace(HostProperties/tag[@name='operating-system'],'$NL',', ')" -m "ReportItem" -n -o $'\t' -v @port -o '/' -v @protocol -o $'\t' -v @svc_name -o $'\t' -o $'\t' -v @pluginName -o $'\t' -v @pluginFamily -o $'\t' -v @pluginID -o $'\t' -i '@severity=3' -o 'High' -b -i '@severity=2' -o 'Medium' -b -i '@severity=1' -o 'Low' -b -i '@severity=0' -o 'Info' -b -o $'\t' -v "str:replace(synopsis,'$NL',' ')" -o $'\t' -v "str:replace(description,'$NL',' ')" -o $'\t' -v "str:replace(solution,'$NL',' ')" -o $'\t' -v cvss_base_score -o ' ' -v cvss_vector -b -n *.nessus | awk 'BEGIN {h="[ERROR]"}{if (/^\t/) printf("%s%s\n",h,$0); else h=$0;}' | sort -Vu | grep -e "${TAB}Critical${TAB}" -e "${TAB}High${TAB}" -e "${TAB}Medium${TAB}" | csv_match_column 7 "$MATCH" > $INFILE
 ISSUES=$(cat $INFILE | cut -f7 | sort -Vu)
 
 TITLE="Multiple $NAME Vulnerabilities"
