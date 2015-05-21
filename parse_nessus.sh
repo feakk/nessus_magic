@@ -24,10 +24,10 @@ echo "# Processing all Nessus files in current directory:"
 ls *.nessus
 
 # Create a list of IP to hostnames, then merge it in with our nessus.tsv below.
-xmlstarlet sel -T -t -m //ReportItem[@pluginID='46180'] -v "../HostProperties/tag[@name='host-ip']" -o '&#09;' -v "../HostProperties/tag[@name='host-fqdn']" -n -v plugin_output  -n *.nessus | grep -v -e '^The' -e '^$' | sed ':a;$!N;s/\n  - /\t/;ta;P;D' | awk -F'\t' '{ for (i=2; i<NF; i++){printf "%s%s%s\n",$1,FS,$i}}' | sort -uV | awk -F '\t' '{ a[$1] = a[$1] "\t" $2 } END { for (item in a ) print item, a[item] }' | sort -uV | sed -e 's/ *\t/, /g' -e 's/, /\t/' > out/ip2host.txt
+xmlstarlet sel -T -t -m //ReportItem[@pluginID='46180'] -v "../HostProperties/tag[@name='host-ip']" -o $'\t' -v "../HostProperties/tag[@name='host-fqdn']" -n -v plugin_output  -n *.nessus | grep -v -e '^The' -e '^$' | sed ':a;$!N;s/\n  - /\t/;ta;P;D' | awk -F'\t' '{ for (i=2; i<NF; i++){printf "%s%s%s\n",$1,FS,$i}}' | sort -uV | awk -F '\t' '{ a[$1] = a[$1] "\t" $2 } END { for (item in a ) print item, a[item] }' | sort -uV | sed -e 's/ *\t/, /g' -e 's/, /\t/' > out/ip2host.txt
 
 # Replaced dns-name with host-fqdn
-xmlstarlet sel -T -t -m NessusClientData_v2/Report/ReportHost -v "HostProperties/tag[@name='host-ip']" -o '&#09;' -v "HostProperties/tag[@name='host-fqdn']" -o '&#09;' -v "str:replace(HostProperties/tag[@name='operating-system'],'&#10;',', ')" -m "ReportItem" -n -o '&#09;' -v @port -o '/' -v @protocol -o '&#09;' -v @svc_name -o '&#09;' -o '&#09;' -v @pluginName -o '&#09;' -v @pluginFamily -o '&#09;' -v @pluginID -o '&#09;' -i '@severity=4' -o 'Critical' -b -i '@severity=3' -o 'High' -b -i '@severity=2' -o 'Medium' -b -i '@severity=1' -o 'Low' -b -i '@severity=0' -o 'Info' -b -o '&#09;' -m 'cve' -v . -o '&#x20;' -b -b -n  *.nessus | awk 'BEGIN {h="[ERROR]"}{if (/^\t/) printf("%s%s\n",h,$0); else h=$0;}' | sort -Vu | sed "1i\\#IP\tHostname\tOS\tPort\tService\t\tName\tFamily\tID\tSeverity\tCVE" > out/nessus.tsv
+xmlstarlet sel -T -t -m NessusClientData_v2/Report/ReportHost -v "HostProperties/tag[@name='host-ip']" -o $'\t' -v "HostProperties/tag[@name='host-fqdn']" -o $'\t' -v "str:replace(HostProperties/tag[@name='operating-system'],'&#10;',', ')" -m "ReportItem" -n -o $'\t' -v @port -o '/' -v @protocol -o $'\t' -v @svc_name -o $'\t' -o $'\t' -v @pluginName -o $'\t' -v @pluginFamily -o $'\t' -v @pluginID -o $'\t' -i '@severity=4' -o 'Critical' -b -i '@severity=3' -o 'High' -b -i '@severity=2' -o 'Medium' -b -i '@severity=1' -o 'Low' -b -i '@severity=0' -o 'Info' -b -o $'\t' -m 'cve' -v . -o '&#x20;' -b -b -n  *.nessus | awk 'BEGIN {h="[ERROR]"}{if (/^\t/) printf("%s%s\n",h,$0); else h=$0;}' | sort -Vu | sed "1i\\#IP\tHostname\tOS\tPort\tService\t\tName\tFamily\tID\tSeverity\tCVE" > out/nessus.tsv
 
 # Merge full list of hostnames which each IP
 while read line; do
@@ -36,7 +36,7 @@ while read line; do
   sed -i "s/^$IP\t[^\t]*/$IP\t$HOST/" out/nessus.tsv
 done < out/ip2host.txt
 
-xmlstarlet sel -T -t -m "NessusClientData_v2/Report/ReportHost" -v "HostProperties/tag[@name='host-ip']" -o '&#09;' -v 'count(ReportItem[@severity=4])' -o '&#09;' -v 'count(ReportItem[@severity=3])' -o '&#09;' -v 'count(ReportItem[@severity=2])' -o '&#09;' -v 'count(ReportItem[@severity=1])' -o '&#09;' -v 'count(ReportItem[@severity=0])' -n *.nessus | sed 's/^\t/[GENERAL]\t/' | sort -V | sed "1i\\#IP Address\tCritical:4\tHigh:3\tMed:2\tLow:1\tInfo:0" > out/nessus_vuln_count.tsv
+xmlstarlet sel -T -t -m "NessusClientData_v2/Report/ReportHost" -v "HostProperties/tag[@name='host-ip']" -o $'\t' -v 'count(ReportItem[@severity=4])' -o $'\t' -v 'count(ReportItem[@severity=3])' -o $'\t' -v 'count(ReportItem[@severity=2])' -o $'\t' -v 'count(ReportItem[@severity=1])' -o $'\t' -v 'count(ReportItem[@severity=0])' -n *.nessus | sed 's/^\t/[GENERAL]\t/' | sort -V | sed "1i\\#IP Address\tCritical:4\tHigh:3\tMed:2\tLow:1\tInfo:0" > out/nessus_vuln_count.tsv
 
 grep -v $'\t0/' out/nessus.tsv > out/nessus_ports.tsv
 cat out/nessus_ports.tsv | cut -f1,4,5,7 | sed 's/\t/:/;s/\/\(tcp\|udp\)\t/\t/;s/www/http/;s/ssl/https/' | awk -F '\t' '{printf "%s://%s\t%s\n",$2,$1,$3}' | grep -v $'\t$' | sed 's/?:/:/;s#^http\(://[^:]*:443\)#https\1#' | sort -V > out/nessus_service_report.tsv
