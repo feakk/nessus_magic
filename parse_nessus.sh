@@ -95,9 +95,10 @@ IFS=$OFS
 # This aggregates them and combines hosts with each issue
 mkdir out/findings
 TAB=$'\t'
-cat "$OUTDIR/nessus.tsv" | cut -f7,10 | grep -e "Critical" -e "High" -e "Medium" | cut -f1 | sort -u | cut -d' ' -f1 | sed 's/^MS[0-9-]*:/MS[0-9]/' | sort | uniq -c | sort -nr | sed 's/^ *//;s/ /\t/' | grep -v "^1$TAB" > "$OUTDIR/issue_aggregation.txt"
-cut -f2 out/issue_aggregation.txt | grep -v "MS\[" | xargs -I{} ./aggregate_findings.sh {} # Keep Microsoft Findings Separate
+cat "$OUTDIR/nessus.tsv" | cut -f7,10 | grep -e "Critical" -e "High" -e "Medium" | cut -f1 | sort -u | cut -d' ' -f1 | sed 's/^MS[0-9-]*:/MS[0-9]/;s#^TLS#SSL#;s#SSL.*#SSL#' | sort | uniq -c | sort -nr | sed 's/^ *//;s/ /\t/' | grep -v "^1$TAB" > "$OUTDIR/issue_aggregation.txt"
+cut -f2 out/issue_aggregation.txt | grep -v -e "MS\[" -e 'SSL' | xargs -I{} ./aggregate_findings.sh {} # Keep SSL/TLS and Microsoft Findings Separate
 ./aggregate_findings.sh MicrosoftPatches 'MS[0-9]' # Process them if they exist
+./aggregate_findings.sh SSL 'SSL|TLS' # Process them if they exist
 mkdir out/findings/data
 mv out/combined_*  out/host_sanity_* out/findings/data
 mv out/finding_* out/issues_* out/findings
